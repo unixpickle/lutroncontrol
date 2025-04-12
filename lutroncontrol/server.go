@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/unixpickle/lutronbroker/lutronbroker"
 )
 
@@ -18,19 +18,6 @@ const (
 	ConnectionTimeout = time.Second * 10
 )
 
-type Header struct {
-	ClientTag string
-	Url       string
-}
-
-type Message struct {
-	CommuniqueType string
-	Header         Header
-	Body           json.RawMessage `json:",omitempty"`
-}
-
-type BrokerConn = lutronbroker.BrokerConnection[Message]
-
 type Server struct {
 	state    *ServerState
 	savePath string
@@ -38,7 +25,7 @@ type Server struct {
 	password string
 
 	sessionLock   sync.RWMutex
-	connection    *BrokerConn
+	connection    BrokerConn
 	reconnErr     error
 	reconnErrTime *time.Time
 }
@@ -58,6 +45,7 @@ func NewServer(savePath string, username string, password string) (*Server, erro
 
 func (s *Server) Serve(host string) error {
 	s.addRoutes()
+	log.Printf("listening on %s", host)
 	return http.ListenAndServe(host, nil)
 }
 
@@ -66,30 +54,16 @@ func (s *Server) addRoutes() {
 }
 
 func (s *Server) serveDevices(w http.ResponseWriter, r *http.Request) {
-	s.handleGetCall(w, func(conn *BrokerConn) (any, int, error) {
-		uuid, err := uuid.NewUUID()
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		devices, err := GetDevices(r.Context(), conn)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
-		clientTag := uuid.String()
-		msg := Message{
-			CommuniqueType: "ReadRequest",
-			Header: Header{
-				ClientTag: clientTag,
-				Url:       "/device",
-			},
-		}
-		response, err := conn.Call(r.Context(), msg, func(response Message) (bool, error) {
-			return response.Header.ClientTag == clientTag, nil
-		})
-		if err != nil {
-			return nil, http.StatusInternalServerError, err
-		}
-		return response.Body, http.StatusOK, nil
+		return devices, http.StatusOK, nil
 	})
 }
 
-func (s *Server) handleGetCall(w http.ResponseWriter, f func(conn *BrokerConn) (any, int, error)) {
+func (s *Server) handleGetCall(w http.ResponseWriter, f func(conn BrokerConn) (any, int, error)) {
 	conn, err := s.getConnection()
 	w.Header().Set("content-type", "application/json")
 	sendError := func(status int, err error) {
@@ -116,7 +90,7 @@ func (s *Server) handleGetCall(w http.ResponseWriter, f func(conn *BrokerConn) (
 	w.Write(data)
 }
 
-func (s *Server) getConnection() (conn *BrokerConn, err error) {
+func (s *Server) getConnection() (conn BrokerConn, err error) {
 	s.sessionLock.RLock()
 	if s.connection != nil && s.connection.Error() == nil {
 		s.sessionLock.RUnlock()
