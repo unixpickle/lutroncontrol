@@ -6,8 +6,8 @@ github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aN
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/unixpickle/essentials v1.3.0 h1:H258Z5Uo1pVzFjxD2rwFWzHPN3s0J0jLs5kuxTRSfCs=
 github.com/unixpickle/essentials v1.3.0/go.mod h1:dQ1idvqrgrDgub3mfckQm7osVPzT3u9rB6NK/LEhmtQ=
-github.com/unixpickle/lutronbroker v0.1.0 h1:18IVIJitelw5S2rwxPCXY72rk+2QfUmXF/pN7mpgghE=
-github.com/unixpickle/lutronbroker v0.1.0/go.mod h1:u+sJXYTO+GyGNqFfTn3ZrlsR9SuzQKd52PIa6XOdfSQ=
+github.com/unixpickle/lutronbroker v0.1.1 h1:VvKJGjzadWqNGmigH6uD0awnD2frI0LX5L75bNxNTo4=
+github.com/unixpickle/lutronbroker v0.1.1/go.mod h1:u+sJXYTO+GyGNqFfTn3ZrlsR9SuzQKd52PIa6XOdfSQ=
 golang.org/x/net v0.27.0 h1:5K3Njcw06/l2y9vpGCSdcxWOYHOUk3dVNGDXN+FvAys=
 golang.org/x/net v0.27.0/go.mod h1:dDi0PyhWNoiUOrAS8uXv/vnScO4wnHQO4mj9fn/RytE=
 golang.org/x/sync v0.7.0 h1:YsImfSBoP9QPYL0xyKJPq0gcaJdG3rInoqxTWbfQu9M=
