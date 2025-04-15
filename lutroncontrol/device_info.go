@@ -26,16 +26,18 @@ type rawZoneStatus struct {
 }
 
 type rawButton struct {
-	Href         string `json:"href"`
-	Name         string
-	ButtonNumber int
-	Parent       rawLink
+	Href             string `json:"href"`
+	Name             string
+	ButtonNumber     int
+	Parent           rawLink
+	ProgrammingModel rawLink
 }
 
 type ButtonInfo struct {
-	Href         string
-	Name         string
-	ButtonNumber int
+	Href             string
+	Name             string
+	ButtonNumber     int
+	ProgrammingModel *ProgrammingModel
 }
 
 type DeviceInfo struct {
@@ -73,13 +75,18 @@ func GetDevices(ctx context.Context, conn BrokerConn) (devices []*DeviceInfo, er
 	if err := ReadRequest(ctx, conn, "/button", &buttonResponse); err != nil {
 		return nil, err
 	}
+	models, err := GetProgrammingModels(ctx, conn)
+	if err != nil {
+		return nil, err
+	}
 	buttonGroupToButtons := map[string][]*ButtonInfo{}
 	for _, button := range buttonResponse.Buttons {
 		key := button.Parent.Href
 		buttonInfo := &ButtonInfo{
-			Href:         button.Href,
-			Name:         button.Name,
-			ButtonNumber: button.ButtonNumber,
+			Href:             button.Href,
+			Name:             button.Name,
+			ButtonNumber:     button.ButtonNumber,
+			ProgrammingModel: models[button.ProgrammingModel.Href],
 		}
 		buttonGroupToButtons[key] = append(buttonGroupToButtons[key], buttonInfo)
 	}
