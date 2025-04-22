@@ -55,7 +55,7 @@ func (s *Server) addRoutes() {
 
 func (s *Server) serveDevices(w http.ResponseWriter, r *http.Request) {
 	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
-		devices, err := GetDevices(r.Context(), conn)
+		devices, err := GetDevices(r.Context(), conn, s.state)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -85,6 +85,12 @@ func (s *Server) handleGetCall(w http.ResponseWriter, f func(conn BrokerConn) (a
 	if err != nil {
 		sendError(http.StatusInternalServerError, err)
 		return
+	}
+	if !s.state.CacheIsSaved() {
+		if err := s.state.Save(s.savePath); err != nil {
+			sendError(http.StatusInternalServerError, err)
+			return
+		}
 	}
 	w.WriteHeader(status)
 	w.Write(data)

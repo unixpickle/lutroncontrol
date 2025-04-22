@@ -48,7 +48,11 @@ type DeviceInfo struct {
 	Buttons            []*ButtonInfo `json:",omitempty"`
 }
 
-func GetDevices(ctx context.Context, conn BrokerConn) (devices []*DeviceInfo, err error) {
+func GetDevices(
+	ctx context.Context,
+	conn BrokerConn,
+	cache Cache,
+) (devices []*DeviceInfo, err error) {
 	defer essentials.AddCtxTo("get devices", &err)
 
 	var devicesResponse struct {
@@ -75,7 +79,7 @@ func GetDevices(ctx context.Context, conn BrokerConn) (devices []*DeviceInfo, er
 	if err := ReadRequest(ctx, conn, "/button", &buttonResponse); err != nil {
 		return nil, err
 	}
-	models, err := GetProgrammingModels(ctx, conn)
+	models, err := GetProgrammingModels(ctx, conn, cache)
 	if err != nil {
 		return nil, err
 	}

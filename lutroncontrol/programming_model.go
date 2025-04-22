@@ -6,6 +6,8 @@ import (
 	"github.com/unixpickle/essentials"
 )
 
+const CachePresetKey = "presets"
+
 type rawProgrammingModel struct {
 	Href                 string `json:"href"`
 	ProgrammingModelType string
@@ -88,7 +90,11 @@ type Preset struct {
 	SwitchedLevelAssignments []SwitchedLevelAssignment
 }
 
-func GetProgrammingModels(ctx context.Context, conn BrokerConn) (models map[string]*ProgrammingModel, err error) {
+func GetProgrammingModels(
+	ctx context.Context,
+	conn BrokerConn,
+	cache Cache,
+) (models map[string]*ProgrammingModel, err error) {
 	defer essentials.AddCtxTo("get programming models", &err)
 
 	var modelsResponse struct {
@@ -106,6 +112,50 @@ func GetProgrammingModels(ctx context.Context, conn BrokerConn) (models map[stri
 			allPresetURLs[model.DualActionProperties.ReleasePreset.Href] = struct{}{}
 		}
 	}
+
+	presetMap := map[string]*Preset{}
+	if existingPresets, ok := cache.GetCache(CachePresetKey); ok {
+		for k, v := range existingPresets.(map[string]*Preset) {
+			if _, ok := allPresetURLs[k]; ok {
+				presetMap[k] = v
+				delete(allPresetURLs, k)
+			}
+		}
+	}
+
+	if newPresets, err := fetchNewPresets(ctx, conn, allPresetURLs); err != nil {
+		return nil, err
+	} else {
+		for k, v := range newPresets {
+			presetMap[k] = v
+		}
+	}
+	cache.SetCache(CachePresetKey, presetMap)
+
+	results := map[string]*ProgrammingModel{}
+	for _, model := range modelsResponse.ProgrammingModels {
+		outModel := &ProgrammingModel{
+			Href:                 model.Href,
+			ProgrammingModelType: model.ProgrammingModelType,
+			Direction:            model.Direction,
+		}
+		if model.Preset != nil {
+			outModel.Preset = presetMap[model.Preset.Href]
+		} else if model.DualActionProperties != nil {
+			outModel.PressPreset = presetMap[model.DualActionProperties.PressPreset.Href]
+			outModel.ReleasePreset = presetMap[model.DualActionProperties.ReleasePreset.Href]
+		}
+		results[model.Href] = outModel
+	}
+
+	return results, nil
+}
+
+func fetchNewPresets(
+	ctx context.Context,
+	conn BrokerConn,
+	allPresetURLs map[string]struct{},
+) (map[string]*Preset, error) {
 	presets, err := ReadRequestsAsMap[rawPreset](ctx, conn, allPresetURLs)
 	if err != nil {
 		return nil, err
@@ -121,20 +171,21 @@ func GetProgrammingModels(ctx context.Context, conn BrokerConn) (models map[stri
 			allSwitchedLevelAssignmentURLs[x.Href] = struct{}{}
 		}
 	}
-	dimmedLevelAssignments, err := ReadRequestsAsMap[rawDimmedLevelAssignment](ctx, conn, allDimmedLevelAssignmentURLs)
+	dimmedLevelAssignments, err := ReadRequestsAsMap[rawDimmedLevelAssignment](
+		ctx, conn, allDimmedLevelAssignmentURLs,
+	)
 	if err != nil {
 		return nil, err
 	}
-	switchedLevelAssignments, err := ReadRequestsAsMap[rawSwitchedLevelAssignment](ctx, conn, allSwitchedLevelAssignmentURLs)
+	switchedLevelAssignments, err := ReadRequestsAsMap[rawSwitchedLevelAssignment](
+		ctx, conn, allSwitchedLevelAssignmentURLs,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	getPresetForURL := func(url string) *Preset {
-		rawPreset, ok := presets[url]
-		if !ok {
-			return nil
-		}
+	results := map[string]*Preset{}
+	for url, rawPreset := range presets {
 		dimmed := []DimmedLevelAssignment{}
 		switched := []SwitchedLevelAssignment{}
 		for _, d := range rawPreset.Preset.AllDimmedLevelAssignments() {
@@ -147,27 +198,11 @@ func GetProgrammingModels(ctx context.Context, conn BrokerConn) (models map[stri
 				switched = append(switched, SwitchedLevelAssignment(s1.SwitchedLevelAssignment))
 			}
 		}
-		return &Preset{
+		results[url] = &Preset{
 			Href:                     rawPreset.Preset.Href,
 			DimmedLevelAssignments:   dimmed,
 			SwitchedLevelAssignments: switched,
 		}
-	}
-
-	results := map[string]*ProgrammingModel{}
-	for _, model := range modelsResponse.ProgrammingModels {
-		outModel := &ProgrammingModel{
-			Href:                 model.Href,
-			ProgrammingModelType: model.ProgrammingModelType,
-			Direction:            model.Direction,
-		}
-		if model.Preset != nil {
-			outModel.Preset = getPresetForURL(model.Preset.Href)
-		} else if model.DualActionProperties != nil {
-			outModel.PressPreset = getPresetForURL(model.DualActionProperties.PressPreset.Href)
-			outModel.ReleasePreset = getPresetForURL(model.DualActionProperties.ReleasePreset.Href)
-		}
-		results[model.Href] = outModel
 	}
 
 	return results, nil
