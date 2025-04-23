@@ -11,8 +11,9 @@ import (
 
 // Cache is an interface for a KV store that is implemented by ServerState.
 type Cache interface {
-	GetCache(key string) (any, bool)
+	GetCache(key string, out any) bool
 	SetCache(key string, obj any)
+	ClearCache()
 }
 
 // ServerState is the state (e.g. session info) that the server saves across
@@ -22,7 +23,7 @@ type Cache interface {
 type ServerState struct {
 	lock         sync.Mutex
 	brokerCreds  *lutronbroker.BrokerCredentials
-	cache        map[string]any
+	cache        map[string]json.RawMessage
 	cacheIsSaved bool
 }
 
@@ -42,13 +43,13 @@ func NewServerState(path string) (state *ServerState, err error) {
 	}
 	var obj struct {
 		BrokerCreds *lutronbroker.BrokerCredentials
-		Cache       map[string]any
+		Cache       map[string]json.RawMessage
 	}
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return nil, err
 	}
 	if obj.Cache == nil {
-		obj.Cache = map[string]any{}
+		obj.Cache = map[string]json.RawMessage{}
 	}
 	return &ServerState{brokerCreds: obj.BrokerCreds, cache: obj.Cache, cacheIsSaved: true}, nil
 }
@@ -66,11 +67,17 @@ func (s *ServerState) SetBrokerCreds(b *lutronbroker.BrokerCredentials) {
 }
 
 // GetCache gets an object stored under the given key.
-func (s *ServerState) GetCache(key string) (any, bool) {
+func (s *ServerState) GetCache(key string, out any) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	obj, ok := s.cache[key]
-	return obj, ok
+	if obj, ok := s.cache[key]; !ok {
+		return false
+	} else {
+		if err := json.Unmarshal(obj, out); err != nil {
+			panic("get cache error: " + err.Error())
+		}
+		return true
+	}
 }
 
 // SetCache updates an object stored under the given key.
@@ -79,8 +86,22 @@ func (s *ServerState) GetCache(key string) (any, bool) {
 func (s *ServerState) SetCache(key string, obj any) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.cache[key] = obj
+	encoded, err := json.Marshal(obj)
+	if err != nil {
+		panic("set cache error: " + err.Error())
+	}
+	s.cache[key] = encoded
 	s.cacheIsSaved = false
+}
+
+// ClearCache clears the cache and toggles CacheIsSaved if necessary.
+func (s *ServerState) ClearCache() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if len(s.cache) > 0 {
+		s.cache = map[string]json.RawMessage{}
+		s.cacheIsSaved = false
+	}
 }
 
 // CacheIsSaved indicates whether or not the latest cache
@@ -99,7 +120,7 @@ func (s *ServerState) Save(path string) (err error) {
 
 	var obj struct {
 		BrokerCreds *lutronbroker.BrokerCredentials
-		Cache       map[string]any
+		Cache       map[string]json.RawMessage
 	}
 	obj.BrokerCreds = s.brokerCreds
 	obj.Cache = s.cache

@@ -51,6 +51,7 @@ func (s *Server) Serve(host string) error {
 
 func (s *Server) addRoutes() {
 	http.HandleFunc("/devices", s.serveDevices)
+	http.HandleFunc("/clear_cache", s.serveClearCache)
 }
 
 func (s *Server) serveDevices(w http.ResponseWriter, r *http.Request) {
@@ -63,32 +64,38 @@ func (s *Server) serveDevices(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) serveClearCache(w http.ResponseWriter, r *http.Request) {
+	s.state.ClearCache()
+	if !s.state.CacheIsSaved() {
+		if err := s.state.Save(s.savePath); err != nil {
+			serveError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	w.Header().Set("content-type", "application/json")
+	w.Write([]byte(`{"data": true}`))
+}
+
 func (s *Server) handleGetCall(w http.ResponseWriter, f func(conn BrokerConn) (any, int, error)) {
 	conn, err := s.getConnection()
 	w.Header().Set("content-type", "application/json")
-	sendError := func(status int, err error) {
-		w.WriteHeader(status)
-		obj := map[string]string{"error": err.Error()}
-		data, _ := json.Marshal(obj)
-		w.Write(data)
-	}
 	if err != nil {
-		sendError(http.StatusInternalServerError, err)
+		serveError(w, http.StatusInternalServerError, err)
 		return
 	}
 	obj, status, err := f(conn)
 	if err != nil {
-		sendError(status, err)
+		serveError(w, status, err)
 		return
 	}
 	data, err := json.Marshal(obj)
 	if err != nil {
-		sendError(http.StatusInternalServerError, err)
+		serveError(w, http.StatusInternalServerError, err)
 		return
 	}
 	if !s.state.CacheIsSaved() {
 		if err := s.state.Save(s.savePath); err != nil {
-			sendError(http.StatusInternalServerError, err)
+			serveError(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
@@ -182,4 +189,12 @@ func (s *Server) getConnection() (conn BrokerConn, err error) {
 	}
 	conn, err = lutronbroker.NewBrokerConnection[Message](ctx, creds)
 	return
+}
+
+func serveError(w http.ResponseWriter, status int, err error) {
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(status)
+	obj := map[string]string{"error": err.Error()}
+	data, _ := json.Marshal(obj)
+	w.Write(data)
 }

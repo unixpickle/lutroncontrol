@@ -114,23 +114,22 @@ func GetProgrammingModels(
 	}
 
 	presetMap := map[string]*Preset{}
-	if existingPresets, ok := cache.GetCache(CachePresetKey); ok {
-		for k, v := range existingPresets.(map[string]*Preset) {
-			if _, ok := allPresetURLs[k]; ok {
-				presetMap[k] = v
-				delete(allPresetURLs, k)
-			}
+	if cache.GetCache(CachePresetKey, &presetMap) {
+		for k := range presetMap {
+			delete(allPresetURLs, k)
 		}
 	}
 
-	if newPresets, err := fetchNewPresets(ctx, conn, allPresetURLs); err != nil {
-		return nil, err
-	} else {
-		for k, v := range newPresets {
-			presetMap[k] = v
+	if len(allPresetURLs) > 0 {
+		if newPresets, err := fetchNewPresets(ctx, conn, allPresetURLs); err != nil {
+			return nil, err
+		} else {
+			for k, v := range newPresets {
+				presetMap[k] = v
+			}
 		}
+		cache.SetCache(CachePresetKey, presetMap)
 	}
-	cache.SetCache(CachePresetKey, presetMap)
 
 	results := map[string]*ProgrammingModel{}
 	for _, model := range modelsResponse.ProgrammingModels {
