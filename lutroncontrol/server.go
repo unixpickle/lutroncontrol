@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/unixpickle/lutronbroker/lutronbroker"
 )
 
@@ -52,6 +54,8 @@ func (s *Server) Serve(host string) error {
 func (s *Server) addRoutes() {
 	http.HandleFunc("/devices", s.serveDevices)
 	http.HandleFunc("/clear_cache", s.serveClearCache)
+	http.HandleFunc("/command/set_level", s.serveSetLevel)
+	http.HandleFunc("/command/press_and_release", s.servePressAndRelease)
 }
 
 func (s *Server) serveDevices(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +78,91 @@ func (s *Server) serveClearCache(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("content-type", "application/json")
 	w.Write([]byte(`{"data": true}`))
+}
+
+func (s *Server) serveSetLevel(w http.ResponseWriter, r *http.Request) {
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		commandType := r.FormValue("type")
+		zone := r.FormValue("zone")
+		levelStr := r.FormValue("level")
+		level, err := strconv.Atoi(levelStr)
+		if err == nil && (level < 0 || level > 100) {
+			err = errors.New("level is out of range")
+		}
+		if err != nil {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid level: %w", err)
+		}
+		if _, err := strconv.Atoi(zone); err != nil {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid zone: %w", err)
+		}
+
+		command := map[string]any{"CommandType": commandType}
+		if commandType == "GoToLevel" {
+			command["Parameter"] = map[string]any{
+				"Type":  "Level",
+				"Value": level,
+			}
+		} else if commandType == "GoToDimmedLevel" {
+			command["DimmedLevelParameters"] = map[string]any{
+				"Level": level,
+			}
+		} else if commandType == "GoToSwitchedLevel" {
+			name := "On"
+			if level == 0 {
+				name = "Off"
+			}
+			command["SwitchedLevelParameters"] = map[string]any{
+				"SwitchedLevel": name,
+			}
+		} else {
+			return nil, http.StatusBadRequest, fmt.Errorf("unknown command type: %s", commandType)
+		}
+
+		body, _ := json.Marshal(map[string]any{
+			"Command": command,
+		})
+		clientTag := uuid.New().String()
+		if err := conn.Send(Message{
+			CommuniqueType: "CreateRequest",
+			Header: Header{
+				ClientTag: clientTag,
+				Url:       "/zone/" + zone + "/commandprocessor",
+			},
+			Body: body,
+		}); err == nil {
+			return true, http.StatusOK, nil
+		} else {
+			return false, http.StatusInternalServerError, err
+		}
+	})
+}
+
+func (s *Server) servePressAndRelease(w http.ResponseWriter, r *http.Request) {
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		button := r.FormValue("button")
+		if _, err := strconv.Atoi(button); err != nil {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid button: %w", err)
+		}
+
+		body, _ := json.Marshal(map[string]any{
+			"Command": map[string]any{
+				"CommandType": "PressAndRelease",
+			},
+		})
+		clientTag := uuid.New().String()
+		if err := conn.Send(Message{
+			CommuniqueType: "CreateRequest",
+			Header: Header{
+				ClientTag: clientTag,
+				Url:       "/button/" + button + "/commandprocessor",
+			},
+			Body: body,
+		}); err == nil {
+			return true, http.StatusOK, nil
+		} else {
+			return false, http.StatusInternalServerError, err
+		}
+	})
 }
 
 func (s *Server) handleGetCall(w http.ResponseWriter, f func(conn BrokerConn) (any, int, error)) {
