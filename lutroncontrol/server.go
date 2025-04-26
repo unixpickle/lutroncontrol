@@ -22,6 +22,7 @@ const (
 
 type Server struct {
 	state    *ServerState
+	assetDir string
 	savePath string
 	username string
 	password string
@@ -32,13 +33,14 @@ type Server struct {
 	reconnErrTime *time.Time
 }
 
-func NewServer(savePath string, username string, password string) (*Server, error) {
+func NewServer(assetDir, savePath string, username string, password string) (*Server, error) {
 	state, err := NewServerState(savePath)
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
 		state:    state,
+		assetDir: assetDir,
 		savePath: savePath,
 		username: username,
 		password: password,
@@ -52,6 +54,9 @@ func (s *Server) Serve(host string) error {
 }
 
 func (s *Server) addRoutes() {
+	fs := http.FileServer(http.Dir(s.assetDir))
+	http.Handle("/", fs)
+
 	http.HandleFunc("/devices", s.serveDevices)
 	http.HandleFunc("/clear_cache", s.serveClearCache)
 	http.HandleFunc("/command/set_level", s.serveSetLevel)

@@ -1,0 +1,48 @@
+body,
+html {
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+#loader {
+    display: none;
+}
+
+body.status-loading #loader {
+    display: block;
+    position: absolute;
+    top: calc(50% - 20px);
+    left: calc(50% - 20px);
+}
+
+.loader {
+    width: 40px;
+    height: 40px;
+
+    background-image: url('/svg/loader.svg');
+    background-size: 100% 100%;
+    animation: spin 4s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+
+#error {
+    display: none;
+    margin: 30px auto;
+    width: 300px;
+    text-align: center;
+}
+
+.error-message {
+    color: #ed5959;
+}
+
+body.status-error #error {
+    display: block;
+}
