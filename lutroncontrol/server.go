@@ -343,8 +343,10 @@ func (s *Server) getConnection() (conn BrokerConn, err error) {
 		return s.connection, nil
 	}
 
-	if err := s.connection.Error(); err != nil {
-		log.Println("reconnecting due to connection error:", err)
+	if s.connection != nil {
+		if err := s.connection.Error(); err != nil {
+			log.Println("reconnecting due to connection error:", err)
+		}
 	}
 
 	if s.reconnErr != nil && time.Since(*s.reconnErrTime) < MinReauthInterval {
