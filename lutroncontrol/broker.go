@@ -112,3 +112,28 @@ func ReadRequestsAsMap[T any](ctx context.Context, conn BrokerConn, urls map[str
 	}
 	return results, nil
 }
+
+// CreateRequest sends a CreateRequest to the given URL with the provided body.
+// It returns an error if the send fails.
+func CreateRequest(ctx context.Context, conn BrokerConn, url string, body any) (err error) {
+	defer essentials.AddCtxTo("request "+url, &err)
+
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	uuid, err := uuid.NewUUID()
+	if err != nil {
+		return err
+	}
+	clientTag := uuid.String()
+	msg := Message{
+		CommuniqueType: "CreateRequest",
+		Header: Header{
+			ClientTag: clientTag,
+			Url:       url,
+		},
+		Body: encoded,
+	}
+	return conn.Send(msg)
+}

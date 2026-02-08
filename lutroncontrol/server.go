@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/unixpickle/lutronbroker/lutronbroker"
 )
 
@@ -142,18 +141,8 @@ func (s *Server) serveAllOff(w http.ResponseWriter, r *http.Request) {
 					"Level": 0,
 				}
 			}
-			body, _ := json.Marshal(map[string]any{
-				"Command": command,
-			})
-			clientTag := uuid.New().String()
-			if err := conn.Send(Message{
-				CommuniqueType: "CreateRequest",
-				Header: Header{
-					ClientTag: clientTag,
-					Url:       *device.Zone + "/commandprocessor",
-				},
-				Body: body,
-			}); err != nil {
+			body := map[string]any{"Command": command}
+			if err := CreateRequest(r.Context(), conn, *device.Zone+"/commandprocessor", body); err != nil {
 				return nil, http.StatusInternalServerError, err
 			}
 		}
@@ -205,18 +194,8 @@ func (s *Server) serveSetLevel(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		body, _ := json.Marshal(map[string]any{
-			"Command": command,
-		})
-		clientTag := uuid.New().String()
-		if err := conn.Send(Message{
-			CommuniqueType: "CreateRequest",
-			Header: Header{
-				ClientTag: clientTag,
-				Url:       "/zone/" + zone + "/commandprocessor",
-			},
-			Body: body,
-		}); err == nil {
+		body := map[string]any{"Command": command}
+		if err := CreateRequest(r.Context(), conn, "/zone/"+zone+"/commandprocessor", body); err == nil {
 			return true, http.StatusOK, nil
 		} else {
 			return false, http.StatusInternalServerError, err
@@ -231,20 +210,12 @@ func (s *Server) servePressAndRelease(w http.ResponseWriter, r *http.Request) {
 			return nil, http.StatusBadRequest, fmt.Errorf("invalid button: %w", err)
 		}
 
-		body, _ := json.Marshal(map[string]any{
+		body := map[string]any{
 			"Command": map[string]any{
 				"CommandType": "PressAndRelease",
 			},
-		})
-		clientTag := uuid.New().String()
-		if err := conn.Send(Message{
-			CommuniqueType: "CreateRequest",
-			Header: Header{
-				ClientTag: clientTag,
-				Url:       "/button/" + button + "/commandprocessor",
-			},
-			Body: body,
-		}); err == nil {
+		}
+		if err := CreateRequest(r.Context(), conn, "/button/"+button+"/commandprocessor", body); err == nil {
 			return true, http.StatusOK, nil
 		} else {
 			return false, http.StatusInternalServerError, err
@@ -275,20 +246,12 @@ func (s *Server) serveSceneActivate(w http.ResponseWriter, r *http.Request) {
 		if _, err := strconv.Atoi(scene); err != nil {
 			return nil, http.StatusBadRequest, fmt.Errorf("invalid scene: %w", err)
 		}
-		body, _ := json.Marshal(map[string]any{
+		body := map[string]any{
 			"Command": map[string]any{
 				"CommandType": "PressAndRelease",
 			},
-		})
-		clientTag := uuid.New().String()
-		if err := conn.Send(Message{
-			CommuniqueType: "CreateRequest",
-			Header: Header{
-				ClientTag: clientTag,
-				Url:       "/virtualbutton/" + scene + "/commandprocessor",
-			},
-			Body: body,
-		}); err == nil {
+		}
+		if err := CreateRequest(r.Context(), conn, "/virtualbutton/"+scene+"/commandprocessor", body); err == nil {
 			return true, http.StatusOK, nil
 		} else {
 			return false, http.StatusInternalServerError, err
@@ -325,20 +288,12 @@ func (s *Server) serveSceneActivateByName(w http.ResponseWriter, r *http.Request
 		if href == "" {
 			return map[string]bool{"data": false}, http.StatusOK, nil
 		}
-		body, _ := json.Marshal(map[string]any{
+		body := map[string]any{
 			"Command": map[string]any{
 				"CommandType": "PressAndRelease",
 			},
-		})
-		clientTag := uuid.New().String()
-		if err := conn.Send(Message{
-			CommuniqueType: "CreateRequest",
-			Header: Header{
-				ClientTag: clientTag,
-				Url:       href + "/commandprocessor",
-			},
-			Body: body,
-		}); err == nil {
+		}
+		if err := CreateRequest(r.Context(), conn, href+"/commandprocessor", body); err == nil {
 			return map[string]bool{"data": true}, http.StatusOK, nil
 		} else {
 			return nil, http.StatusInternalServerError, err
@@ -380,18 +335,26 @@ func (s *Server) getConnection() (conn BrokerConn, err error) {
 		return s.connection, nil
 	}
 	s.sessionLock.RUnlock()
-
 	s.sessionLock.Lock()
+
+	// Check if some other goroutine in getConnection raced us.
+	if s.connection != nil && s.connection.Error() == nil {
+		s.sessionLock.Unlock()
+		return s.connection, nil
+	}
+
 	if s.reconnErr != nil && time.Since(*s.reconnErrTime) < MinReauthInterval {
 		s.sessionLock.Unlock()
 		return nil, s.reconnErr
 	}
 	defer func() {
 		if err != nil {
+			log.Println("error establishing new broker connection:", err)
 			s.reconnErr = err
 			t := time.Now()
 			s.reconnErrTime = &t
 		} else {
+			log.Println("established new broker connection")
 			s.connection = conn
 			go s.pingLoop(conn)
 		}
