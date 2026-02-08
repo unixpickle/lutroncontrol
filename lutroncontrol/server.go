@@ -19,6 +19,8 @@ import (
 const (
 	MinReauthInterval = time.Minute * 5
 	ConnectionTimeout = time.Second * 10
+	PingInterval      = time.Second * 20
+	PingTimeout       = time.Second * 5
 )
 
 type Server struct {
@@ -391,6 +393,7 @@ func (s *Server) getConnection() (conn BrokerConn, err error) {
 			s.reconnErrTime = &t
 		} else {
 			s.connection = conn
+			go s.pingLoop(conn)
 		}
 		s.sessionLock.Unlock()
 	}()
@@ -457,6 +460,37 @@ func (s *Server) getConnection() (conn BrokerConn, err error) {
 	}
 	conn, err = lutronbroker.NewBrokerConnection[Message](ctx, creds)
 	return
+}
+
+func (s *Server) pingLoop(conn BrokerConn) {
+	ticker := time.NewTicker(PingInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		if conn.Error() != nil {
+			// No need to clear the connection; future getConnection()
+			// calls will replace it.
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), PingTimeout)
+		var response any
+		err := ReadRequest(ctx, conn, "/server/1/status/ping", &response)
+		cancel()
+		if conn.Error() != nil {
+			// See comment above; this is handled already.
+			return
+		} else if err != nil {
+			// There's some error (e.g. a timeout) that the BrokerConn missed.
+			s.sessionLock.Lock()
+			defer s.sessionLock.Unlock()
+			// Make sure the connection didn't hit an error right before we got
+			// the lock, in which case it could have already been replaced.
+			if s.connection == conn {
+				s.connection = nil
+				conn.Close()
+			}
+			return
+		}
+	}
 }
 
 func serveError(w http.ResponseWriter, status int, err error) {
