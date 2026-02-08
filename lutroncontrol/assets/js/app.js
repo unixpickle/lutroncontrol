@@ -111,14 +111,11 @@ class App {
     setStatus(message, kind) {
         this.statusBadge.textContent = message;
         this.statusBadge.className = `status-badge status-${kind}`;
-        this.banner.textContent = message;
-        this.banner.className = `banner banner-${kind}`;
-        window.setTimeout(() => {
-            if (this.banner.textContent === message) {
-                this.banner.textContent = '';
-                this.banner.className = 'banner';
-            }
-        }, 4000);
+        this.banner.textContent = '';
+        this.banner.className = 'banner';
+        if (kind === 'error') {
+            console.error(message);
+        }
     }
 }
 class View {
