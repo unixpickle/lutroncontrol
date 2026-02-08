@@ -343,6 +343,10 @@ func (s *Server) getConnection() (conn BrokerConn, err error) {
 		return s.connection, nil
 	}
 
+	if err := s.connection.Error(); err != nil {
+		log.Println("reconnecting due to connection error:", err)
+	}
+
 	if s.reconnErr != nil && time.Since(*s.reconnErrTime) < MinReauthInterval {
 		s.sessionLock.Unlock()
 		return nil, s.reconnErr
@@ -448,6 +452,7 @@ func (s *Server) pingLoop(conn BrokerConn) {
 			// Make sure the connection didn't hit an error right before we got
 			// the lock, in which case it could have already been replaced.
 			if s.connection == conn {
+				log.Println("disconnecting due to ping failure:", err)
 				s.connection = nil
 				conn.Close()
 			}
