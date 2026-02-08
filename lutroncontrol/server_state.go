@@ -32,7 +32,7 @@ func NewServerState(path string) (state *ServerState, err error) {
 	defer essentials.AddCtxTo("load server state", &err)
 
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
-		return &ServerState{}, nil
+		return &ServerState{cache: map[string]json.RawMessage{}}, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -86,6 +86,9 @@ func (s *ServerState) GetCache(key string, out any) bool {
 func (s *ServerState) SetCache(key string, obj any) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if s.cache == nil {
+		s.cache = map[string]json.RawMessage{}
+	}
 	encoded, err := json.Marshal(obj)
 	if err != nil {
 		panic("set cache error: " + err.Error())

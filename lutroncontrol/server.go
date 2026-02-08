@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ type Server struct {
 	savePath string
 	username string
 	password string
+	basePath string
 
 	sessionLock   sync.RWMutex
 	connection    BrokerConn
@@ -33,10 +35,19 @@ type Server struct {
 	reconnErrTime *time.Time
 }
 
-func NewServer(assetDir, savePath string, username string, password string) (*Server, error) {
+func NewServer(assetDir, savePath string, username string, password string, basePath string) (*Server, error) {
 	state, err := NewServerState(savePath)
 	if err != nil {
 		return nil, err
+	}
+	if basePath == "" {
+		basePath = "/"
+	}
+	if basePath[0] != '/' {
+		basePath = "/" + basePath
+	}
+	if len(basePath) > 1 && basePath[len(basePath)-1] == '/' {
+		basePath = basePath[:len(basePath)-1]
 	}
 	return &Server{
 		state:    state,
@@ -44,23 +55,41 @@ func NewServer(assetDir, savePath string, username string, password string) (*Se
 		savePath: savePath,
 		username: username,
 		password: password,
+		basePath: basePath,
 	}, nil
 }
 
 func (s *Server) Serve(host string) error {
-	s.addRoutes()
+	mux := s.addRoutes()
 	log.Printf("listening on %s", host)
-	return http.ListenAndServe(host, nil)
+	return http.ListenAndServe(host, mux)
 }
 
-func (s *Server) addRoutes() {
+func (s *Server) addRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir(s.assetDir))
-	http.Handle("/", fs)
-
-	http.HandleFunc("/devices", s.serveDevices)
-	http.HandleFunc("/clear_cache", s.serveClearCache)
-	http.HandleFunc("/command/set_level", s.serveSetLevel)
-	http.HandleFunc("/command/press_and_release", s.servePressAndRelease)
+	if s.basePath == "/" {
+		mux.Handle("/", fs)
+		mux.HandleFunc("/devices", s.serveDevices)
+		mux.HandleFunc("/clear_cache", s.serveClearCache)
+		mux.HandleFunc("/command/all_off", s.serveAllOff)
+		mux.HandleFunc("/command/set_level", s.serveSetLevel)
+		mux.HandleFunc("/command/press_and_release", s.servePressAndRelease)
+		mux.HandleFunc("/scenes", s.serveScenes)
+		mux.HandleFunc("/scene/activate", s.serveSceneActivate)
+		mux.HandleFunc("/scene/activate_by_name", s.serveSceneActivateByName)
+	} else {
+		mux.Handle(s.basePath+"/", http.StripPrefix(s.basePath+"/", fs))
+		mux.HandleFunc(s.basePath+"/devices", s.serveDevices)
+		mux.HandleFunc(s.basePath+"/clear_cache", s.serveClearCache)
+		mux.HandleFunc(s.basePath+"/command/all_off", s.serveAllOff)
+		mux.HandleFunc(s.basePath+"/command/set_level", s.serveSetLevel)
+		mux.HandleFunc(s.basePath+"/command/press_and_release", s.servePressAndRelease)
+		mux.HandleFunc(s.basePath+"/scenes", s.serveScenes)
+		mux.HandleFunc(s.basePath+"/scene/activate", s.serveSceneActivate)
+		mux.HandleFunc(s.basePath+"/scene/activate_by_name", s.serveSceneActivateByName)
+	}
+	return mux
 }
 
 func (s *Server) serveDevices(w http.ResponseWriter, r *http.Request) {
@@ -85,42 +114,93 @@ func (s *Server) serveClearCache(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"data": true}`))
 }
 
+func (s *Server) serveAllOff(w http.ResponseWriter, r *http.Request) {
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		devices, err := GetDevices(r.Context(), conn, s.state)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		for _, device := range devices {
+			if device.Zone == nil || *device.Zone == "" {
+				continue
+			}
+			if device.DeviceType == "QsWirelessShade" {
+				continue
+			}
+			commandType := "GoToDimmedLevel"
+			command := map[string]any{"CommandType": commandType}
+			if device.DeviceType == "WallSwitch" {
+				commandType = "GoToSwitchedLevel"
+				command["CommandType"] = commandType
+				command["SwitchedLevelParameters"] = map[string]any{
+					"SwitchedLevel": "Off",
+				}
+			} else {
+				command["DimmedLevelParameters"] = map[string]any{
+					"Level": 0,
+				}
+			}
+			body, _ := json.Marshal(map[string]any{
+				"Command": command,
+			})
+			clientTag := uuid.New().String()
+			if err := conn.Send(Message{
+				CommuniqueType: "CreateRequest",
+				Header: Header{
+					ClientTag: clientTag,
+					Url:       *device.Zone + "/commandprocessor",
+				},
+				Body: body,
+			}); err != nil {
+				return nil, http.StatusInternalServerError, err
+			}
+		}
+		return map[string]bool{"data": true}, http.StatusOK, nil
+	})
+}
+
 func (s *Server) serveSetLevel(w http.ResponseWriter, r *http.Request) {
 	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
 		commandType := r.FormValue("type")
 		zone := r.FormValue("zone")
-		levelStr := r.FormValue("level")
-		level, err := strconv.Atoi(levelStr)
-		if err == nil && (level < 0 || level > 100) {
-			err = errors.New("level is out of range")
-		}
-		if err != nil {
-			return nil, http.StatusBadRequest, fmt.Errorf("invalid level: %w", err)
-		}
 		if _, err := strconv.Atoi(zone); err != nil {
 			return nil, http.StatusBadRequest, fmt.Errorf("invalid zone: %w", err)
 		}
 
 		command := map[string]any{"CommandType": commandType}
-		if commandType == "GoToLevel" {
-			command["Parameter"] = map[string]any{
-				"Type":  "Level",
-				"Value": level,
-			}
-		} else if commandType == "GoToDimmedLevel" {
-			command["DimmedLevelParameters"] = map[string]any{
-				"Level": level,
-			}
-		} else if commandType == "GoToSwitchedLevel" {
-			name := "On"
-			if level == 0 {
-				name = "Off"
-			}
-			command["SwitchedLevelParameters"] = map[string]any{
-				"SwitchedLevel": name,
-			}
+
+		if commandType == "Raise" || commandType == "Lower" || commandType == "Stop" {
+			// No additional parameters needed for these shade commands.
 		} else {
-			return nil, http.StatusBadRequest, fmt.Errorf("unknown command type: %s", commandType)
+			levelStr := r.FormValue("level")
+			level, err := strconv.Atoi(levelStr)
+			if err == nil && (level < 0 || level > 100) {
+				err = errors.New("level is out of range")
+			}
+			if err != nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("invalid level: %w", err)
+			}
+
+			if commandType == "GoToLevel" {
+				command["Parameter"] = map[string]any{
+					"Type":  "Level",
+					"Value": level,
+				}
+			} else if commandType == "GoToDimmedLevel" {
+				command["DimmedLevelParameters"] = map[string]any{
+					"Level": level,
+				}
+			} else if commandType == "GoToSwitchedLevel" {
+				name := "On"
+				if level == 0 {
+					name = "Off"
+				}
+				command["SwitchedLevelParameters"] = map[string]any{
+					"SwitchedLevel": name,
+				}
+			} else {
+				return nil, http.StatusBadRequest, fmt.Errorf("unknown command type: %s", commandType)
+			}
 		}
 
 		body, _ := json.Marshal(map[string]any{
@@ -166,6 +246,100 @@ func (s *Server) servePressAndRelease(w http.ResponseWriter, r *http.Request) {
 			return true, http.StatusOK, nil
 		} else {
 			return false, http.StatusInternalServerError, err
+		}
+	})
+}
+
+func (s *Server) serveScenes(w http.ResponseWriter, r *http.Request) {
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		var response struct {
+			VirtualButtons []struct {
+				Href         string `json:"href"`
+				Name         string
+				IsProgrammed bool
+				ButtonNumber int
+			}
+		}
+		if err := ReadRequest(r.Context(), conn, "/virtualbutton", &response); err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		return response.VirtualButtons, http.StatusOK, nil
+	})
+}
+
+func (s *Server) serveSceneActivate(w http.ResponseWriter, r *http.Request) {
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		scene := r.FormValue("scene")
+		if _, err := strconv.Atoi(scene); err != nil {
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid scene: %w", err)
+		}
+		body, _ := json.Marshal(map[string]any{
+			"Command": map[string]any{
+				"CommandType": "PressAndRelease",
+			},
+		})
+		clientTag := uuid.New().String()
+		if err := conn.Send(Message{
+			CommuniqueType: "CreateRequest",
+			Header: Header{
+				ClientTag: clientTag,
+				Url:       "/virtualbutton/" + scene + "/commandprocessor",
+			},
+			Body: body,
+		}); err == nil {
+			return true, http.StatusOK, nil
+		} else {
+			return false, http.StatusInternalServerError, err
+		}
+	})
+}
+
+func (s *Server) serveSceneActivateByName(w http.ResponseWriter, r *http.Request) {
+	s.handleGetCall(w, func(conn BrokerConn) (any, int, error) {
+		sceneName := r.FormValue("name")
+		if sceneName == "" {
+			return map[string]bool{"data": false}, http.StatusOK, nil
+		}
+		var response struct {
+			VirtualButtons []struct {
+				Href         string `json:"href"`
+				Name         string
+				IsProgrammed bool
+			}
+		}
+		if err := ReadRequest(r.Context(), conn, "/virtualbutton", &response); err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		var href string
+		for _, scene := range response.VirtualButtons {
+			if !scene.IsProgrammed {
+				continue
+			}
+			if strings.EqualFold(scene.Name, sceneName) {
+				href = scene.Href
+				break
+			}
+		}
+		if href == "" {
+			return map[string]bool{"data": false}, http.StatusOK, nil
+		}
+		body, _ := json.Marshal(map[string]any{
+			"Command": map[string]any{
+				"CommandType": "PressAndRelease",
+			},
+		})
+		clientTag := uuid.New().String()
+		if err := conn.Send(Message{
+			CommuniqueType: "CreateRequest",
+			Header: Header{
+				ClientTag: clientTag,
+				Url:       href + "/commandprocessor",
+			},
+			Body: body,
+		}); err == nil {
+			return map[string]bool{"data": true}, http.StatusOK, nil
+		} else {
+			return nil, http.StatusInternalServerError, err
 		}
 	})
 }

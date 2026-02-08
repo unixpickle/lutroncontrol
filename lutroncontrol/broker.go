@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -18,6 +19,15 @@ type Message struct {
 	CommuniqueType string
 	Header         Header
 	Body           json.RawMessage `json:",omitempty"`
+}
+
+func (m Message) String() string {
+	return fmt.Sprintf(
+		"Message(CommuniqueType=%s, Header=%s, Body=%s)",
+		m.CommuniqueType,
+		m.Header,
+		string(m.Body),
+	)
 }
 
 type BrokerConn interface {
