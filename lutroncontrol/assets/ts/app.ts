@@ -77,8 +77,21 @@ class App {
             }
         });
 
+        const entries = Array.from(roomToDevs.entries());
+        entries.sort((a, b) => {
+            const aIsOther = a[0] === 'Other';
+            const bIsOther = b[0] === 'Other';
+            if (aIsOther && !bIsOther) {
+                return 1;
+            }
+            if (!aIsOther && bIsOther) {
+                return -1;
+            }
+            return a[0].localeCompare(b[0]);
+        });
+
         this.roomsElement.innerHTML = '';
-        roomToDevs.forEach((value, key) => {
+        entries.forEach(([key, value]) => {
             const room = new RoomView(key, value, (message, kind) => this.setStatus(message, kind), () => this.refresh(false));
             this.roomsElement.appendChild(room.element);
         });
