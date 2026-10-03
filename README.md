@@ -24,6 +24,7 @@ Open the UI at `http://localhost:8080/`.
 - `-save-path` (default `state.json`): path to the cached broker state.
 - `-secret` (default empty): if set, serve everything under `/<secret>/`.
   - Example: `-secret somesecret` → UI at `http://localhost:8080/somesecret/`
+  - The secret must be a single path segment; optional leading and trailing slashes are accepted.
   - If not set, routes are served at `/`.
 
 ## HTTP API

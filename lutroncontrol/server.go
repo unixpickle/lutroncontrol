@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/unixpickle/lutronbroker/lutronbroker"
+	"github.com/unixpickle/secretprefix"
 )
 
 const (
@@ -50,6 +51,9 @@ func NewServer(assetDir, savePath string, username string, password string, base
 	if len(basePath) > 1 && basePath[len(basePath)-1] == '/' {
 		basePath = basePath[:len(basePath)-1]
 	}
+	if strings.Contains(basePath[1:], "/") {
+		return nil, errors.New("secret URL prefix must be a single path segment")
+	}
 	return &Server{
 		state:    state,
 		assetDir: assetDir,
@@ -66,29 +70,19 @@ func (s *Server) Serve(host string) error {
 	return http.ListenAndServe(host, mux)
 }
 
-func (s *Server) addRoutes() *http.ServeMux {
+func (s *Server) addRoutes() http.Handler {
 	mux := http.NewServeMux()
-	fs := http.FileServer(http.Dir(s.assetDir))
-	if s.basePath == "/" {
-		mux.Handle("/", fs)
-		mux.HandleFunc("/devices", s.serveDevices)
-		mux.HandleFunc("/clear_cache", s.serveClearCache)
-		mux.HandleFunc("/command/all_off", s.serveAllOff)
-		mux.HandleFunc("/command/set_level", s.serveSetLevel)
-		mux.HandleFunc("/command/press_and_release", s.servePressAndRelease)
-		mux.HandleFunc("/scenes", s.serveScenes)
-		mux.HandleFunc("/scene/activate", s.serveSceneActivate)
-		mux.HandleFunc("/scene/activate_by_name", s.serveSceneActivateByName)
-	} else {
-		mux.Handle(s.basePath+"/", http.StripPrefix(s.basePath+"/", fs))
-		mux.HandleFunc(s.basePath+"/devices", s.serveDevices)
-		mux.HandleFunc(s.basePath+"/clear_cache", s.serveClearCache)
-		mux.HandleFunc(s.basePath+"/command/all_off", s.serveAllOff)
-		mux.HandleFunc(s.basePath+"/command/set_level", s.serveSetLevel)
-		mux.HandleFunc(s.basePath+"/command/press_and_release", s.servePressAndRelease)
-		mux.HandleFunc(s.basePath+"/scenes", s.serveScenes)
-		mux.HandleFunc(s.basePath+"/scene/activate", s.serveSceneActivate)
-		mux.HandleFunc(s.basePath+"/scene/activate_by_name", s.serveSceneActivateByName)
+	mux.Handle("/", http.FileServer(http.Dir(s.assetDir)))
+	mux.HandleFunc("/devices", s.serveDevices)
+	mux.HandleFunc("/clear_cache", s.serveClearCache)
+	mux.HandleFunc("/command/all_off", s.serveAllOff)
+	mux.HandleFunc("/command/set_level", s.serveSetLevel)
+	mux.HandleFunc("/command/press_and_release", s.servePressAndRelease)
+	mux.HandleFunc("/scenes", s.serveScenes)
+	mux.HandleFunc("/scene/activate", s.serveSceneActivate)
+	mux.HandleFunc("/scene/activate_by_name", s.serveSceneActivateByName)
+	if s.basePath != "/" {
+		return secretprefix.Wrap(s.basePath[1:], mux)
 	}
 	return mux
 }

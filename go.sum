@@ -8,6 +8,8 @@ github.com/unixpickle/essentials v1.3.0 h1:H258Z5Uo1pVzFjxD2rwFWzHPN3s0J0jLs5kux
 github.com/unixpickle/essentials v1.3.0/go.mod h1:dQ1idvqrgrDgub3mfckQm7osVPzT3u9rB6NK/LEhmtQ=
 github.com/unixpickle/lutronbroker v0.1.4 h1:Cc1BOpd0p60PbcFbrdW7OY0GtcOwQMHiEc18yV9C80I=
 github.com/unixpickle/lutronbroker v0.1.4/go.mod h1:u+sJXYTO+GyGNqFfTn3ZrlsR9SuzQKd52PIa6XOdfSQ=
+github.com/unixpickle/secretprefix v0.0.0-20261003174022-677c2b937062 h1:IfKgzyYzHlQEjoOxOIj3EfWuWRiA+Q6XwFHxgH90XYQ=
+github.com/unixpickle/secretprefix v0.0.0-20261003174022-677c2b937062/go.mod h1:xI4MeJYXM89t10xvWR8srYYk7TAyt60/88rrQXhfZZU=
 golang.org/x/net v0.27.0 h1:5K3Njcw06/l2y9vpGCSdcxWOYHOUk3dVNGDXN+FvAys=
 golang.org/x/net v0.27.0/go.mod h1:dDi0PyhWNoiUOrAS8uXv/vnScO4wnHQO4mj9fn/RytE=
 golang.org/x/sync v0.7.0 h1:YsImfSBoP9QPYL0xyKJPq0gcaJdG3rInoqxTWbfQu9M=
