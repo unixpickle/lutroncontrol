@@ -15,7 +15,7 @@ class App {
         this.snapshotKey = `lutroncontrol:snapshot:v1:${new URL('.', window.location.href).pathname}`;
         this.scenesElement = document.getElementById('scenes');
         this.roomsElement = document.getElementById('rooms');
-        this.statusBadge = document.getElementById('status-badge');
+        this.statusMessage = document.getElementById('status-message');
         this.banner = document.getElementById('banner');
         this.refreshButton = document.getElementById('refresh-button');
         this.allOffButton = document.getElementById('all-off-button');
@@ -46,6 +46,9 @@ class App {
                 return;
             }
             this.refreshing = true;
+            this.refreshButton.classList.add('is-refreshing');
+            this.refreshButton.disabled = true;
+            this.refreshButton.setAttribute('aria-busy', 'true');
             if (showLoading && !this.hasSnapshot) {
                 document.body.className = 'status-loading';
             }
@@ -65,6 +68,9 @@ class App {
             finally {
                 document.body.classList.remove('status-loading');
                 this.refreshing = false;
+                this.refreshButton.classList.remove('is-refreshing');
+                this.refreshButton.disabled = false;
+                this.refreshButton.setAttribute('aria-busy', 'false');
             }
         });
     }
@@ -156,9 +162,9 @@ class App {
             : `Could not load devices. Tap Refresh to retry. ${err}`, 'error');
     }
     setStatus(message, kind) {
-        this.statusBadge.textContent = kind === 'error' ? 'Connection error' : message;
-        this.statusBadge.title = message;
-        this.statusBadge.className = `status-badge status-${kind}`;
+        this.statusMessage.textContent = message;
+        this.refreshButton.title = `${message} — Refresh devices`;
+        this.refreshButton.dataset.status = kind;
         this.banner.textContent = '';
         this.banner.className = 'banner';
         if (kind === 'error') {

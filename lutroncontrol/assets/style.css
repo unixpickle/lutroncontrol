@@ -64,41 +64,63 @@ body {
     align-items: center;
 }
 
-.topbar-actions > button {
-    flex-shrink: 0;
+.topbar-actions > .action-button {
+    flex: 0 1 auto;
     white-space: nowrap;
 }
 
-.status-badge {
-    flex: 0 1 11rem;
-    width: 11rem;
-    min-width: 0;
-    padding: 8px 14px;
-    line-height: 18px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.refresh-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid rgba(248, 250, 252, 0.4);
     border-radius: 999px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
     background: rgba(248, 250, 252, 0.15);
     color: #f8fafc;
+    cursor: pointer;
 }
 
-.status-success {
+.refresh-button[data-status="success"] {
     background: rgba(34, 197, 94, 0.2);
     color: #dcfce7;
 }
 
-.status-badge.status-error {
+.refresh-button[data-status="error"] {
     background: rgba(239, 68, 68, 0.2);
     color: #fee2e2;
 }
 
-.status-info {
+.refresh-button[data-status="info"] {
     background: rgba(56, 189, 248, 0.2);
     color: #e0f2fe;
+}
+
+.refresh-button.is-refreshing svg {
+    animation: spin 1s linear infinite;
+}
+
+.refresh-button:disabled {
+    cursor: wait;
+}
+
+.refresh-button:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .banner {
@@ -400,6 +422,10 @@ body.status-loading #loader {
         justify-content: space-between;
     }
 
+    .topbar-actions > .action-button {
+        flex: 1;
+    }
+
     .rooms-grid {
         column-count: 1;
     }
@@ -430,6 +456,12 @@ body.status-loading #loader {
 
     .button-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .refresh-button.is-refreshing svg {
+        animation: none;
     }
 }
 

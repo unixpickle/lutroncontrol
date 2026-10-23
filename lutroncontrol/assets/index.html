@@ -21,9 +21,14 @@
             <div class="brand-subtitle">Local lighting dashboard</div>
         </div>
         <div class="topbar-actions">
-            <button id="refresh-button" class="action-button">Refresh</button>
+            <button id="refresh-button" class="refresh-button" aria-label="Refresh devices" title="Refresh devices">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 7v5h-5" />
+                    <path d="M20 12a8 8 0 1 0-2.3 5.7M20 12a8 8 0 0 0-2.3-5.7" />
+                </svg>
+            </button>
             <button id="all-off-button" class="action-button action-button-warn">All Off</button>
-            <div id="status-badge" class="status-badge status-info" role="status">Starting up...</div>
+            <span id="status-message" class="visually-hidden" role="status">Starting up...</span>
         </div>
     </header>
 

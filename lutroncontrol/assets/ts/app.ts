@@ -9,7 +9,7 @@ type RefreshFn = () => void;
 class App {
     private roomsElement: HTMLElement;
     private scenesElement: HTMLElement;
-    private statusBadge: HTMLElement;
+    private statusMessage: HTMLElement;
     private banner: HTMLElement;
     private refreshButton: HTMLButtonElement;
     private allOffButton: HTMLButtonElement;
@@ -21,7 +21,7 @@ class App {
     constructor() {
         this.scenesElement = document.getElementById('scenes');
         this.roomsElement = document.getElementById('rooms');
-        this.statusBadge = document.getElementById('status-badge');
+        this.statusMessage = document.getElementById('status-message');
         this.banner = document.getElementById('banner');
         this.refreshButton = document.getElementById('refresh-button') as HTMLButtonElement;
         this.allOffButton = document.getElementById('all-off-button') as HTMLButtonElement;
@@ -51,6 +51,9 @@ class App {
             return;
         }
         this.refreshing = true;
+        this.refreshButton.classList.add('is-refreshing');
+        this.refreshButton.disabled = true;
+        this.refreshButton.setAttribute('aria-busy', 'true');
         if (showLoading && !this.hasSnapshot) {
             document.body.className = 'status-loading';
         }
@@ -68,6 +71,9 @@ class App {
         } finally {
             document.body.classList.remove('status-loading');
             this.refreshing = false;
+            this.refreshButton.classList.remove('is-refreshing');
+            this.refreshButton.disabled = false;
+            this.refreshButton.setAttribute('aria-busy', 'false');
         }
     }
 
@@ -165,9 +171,9 @@ class App {
     }
 
     private setStatus(message: string, kind: BannerKind) {
-        this.statusBadge.textContent = kind === 'error' ? 'Connection error' : message;
-        this.statusBadge.title = message;
-        this.statusBadge.className = `status-badge status-${kind}`;
+        this.statusMessage.textContent = message;
+        this.refreshButton.title = `${message} — Refresh devices`;
+        this.refreshButton.dataset.status = kind;
         this.banner.textContent = '';
         this.banner.className = 'banner';
         if (kind === 'error') {
