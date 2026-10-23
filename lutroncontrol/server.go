@@ -72,7 +72,12 @@ func (s *Server) Serve(host string) error {
 
 func (s *Server) addRoutes() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.Dir(s.assetDir)))
+	assets := http.FileServer(http.Dir(s.assetDir))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Revalidate assets on navigation so a new page cannot run stale scripts.
+		w.Header().Set("Cache-Control", "no-cache")
+		assets.ServeHTTP(w, r)
+	}))
 	mux.HandleFunc("/devices", s.serveDevices)
 	mux.HandleFunc("/clear_cache", s.serveClearCache)
 	mux.HandleFunc("/command/all_off", s.serveAllOff)
