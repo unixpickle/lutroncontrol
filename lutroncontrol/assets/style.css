@@ -201,21 +201,53 @@ body {
 
 .room-card {
     break-inside: avoid;
-    display: inline-flex;
+    display: inline-block;
     width: 100%;
     margin: 0 0 22px;
     background: var(--card);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    padding: 20px;
-    flex-direction: column;
-    gap: 16px;
+    padding: 0;
 }
 
 .room-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 16px;
+    padding: 20px;
+    cursor: pointer;
+    list-style: none;
+    border-radius: var(--radius);
+}
+
+.room-header::-webkit-details-marker {
+    display: none;
+}
+
+.room-header::after {
+    content: '';
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+    border-right: 2px solid var(--ink-soft);
+    border-bottom: 2px solid var(--ink-soft);
+    transform: rotate(-45deg);
+}
+
+.room-card[open] > .room-header::after {
+    transform: rotate(45deg);
+}
+
+.room-header:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -3px;
+}
+
+.room-title-wrap {
+    margin: 0;
+    min-width: 0;
 }
 
 .room-title {
@@ -226,6 +258,8 @@ body {
 }
 
 .room-summary {
+    display: block;
+    font-weight: 400;
     font-size: 13px;
     color: var(--ink-soft);
     margin-top: 4px;
@@ -234,6 +268,7 @@ body {
 .device-grid {
     display: grid;
     gap: 14px;
+    padding: 0 20px 20px;
 }
 
 .device-card {

@@ -16,6 +16,7 @@ class App {
     private refreshing = false;
     private refreshTimer: number | null = null;
     private hasSnapshot = false;
+    private roomViews = new Map<string, RoomView>();
     private readonly snapshotKey = `lutroncontrol:snapshot:v1:${new URL('.', window.location.href).pathname}`;
 
     constructor() {
@@ -129,9 +130,13 @@ class App {
             return a[0].localeCompare(b[0]);
         });
 
+        const previousRooms = this.roomViews;
+        this.roomViews = new Map<string, RoomView>();
         this.roomsElement.innerHTML = '';
         entries.forEach(([key, value]) => {
             const room = new RoomView(key, value, (message, kind) => this.setStatus(message, kind), () => this.refresh(false));
+            room.isOpen = previousRooms.get(key)?.isOpen ?? false;
+            this.roomViews.set(key, room);
             this.roomsElement.appendChild(room.element);
         });
 
@@ -207,26 +212,34 @@ class RoomView extends View {
         return this._name;
     }
 
+    public get isOpen(): boolean {
+        return (this.element as HTMLDetailsElement).open;
+    }
+
+    public set isOpen(open: boolean) {
+        (this.element as HTMLDetailsElement).open = open;
+    }
+
     constructor(name: string, devices: LutronDevice[], notify: BannerFn, refresh: RefreshFn) {
-        super(document.createElement('section'));
+        super(document.createElement('details'));
         this.element.className = "room-card";
         this._name = name;
         this.devices = devices;
         this.notify = notify;
         this.refresh = refresh;
 
-        const header = document.createElement('div');
+        const header = document.createElement('summary');
         header.className = 'room-header';
 
-        const titleWrap = document.createElement('div');
+        const titleWrap = document.createElement('h2');
         titleWrap.className = 'room-title-wrap';
 
-        const label = document.createElement('h2');
+        const label = document.createElement('span');
         label.className = 'room-title';
         label.textContent = name;
         titleWrap.appendChild(label);
 
-        this.summaryElement = document.createElement('div');
+        this.summaryElement = document.createElement('span');
         this.summaryElement.className = 'room-summary';
         titleWrap.appendChild(this.summaryElement);
 

@@ -71,6 +71,7 @@ All endpoints are `GET` and return JSON. If `-secret` is set, prefix all paths w
 The UI is a single-page dashboard that:
 
 - Groups devices by room.
+- Starts rooms collapsed; tap a room header to show its controls. Open rooms stay open during refreshes.
 - Shows per-device controls:
   - Dimmers: slider + on/off.
   - Switches: on/off.
