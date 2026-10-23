@@ -7,22 +7,20 @@ type BannerFn = (message: string, kind: BannerKind) => void;
 type RefreshFn = () => void;
 
 class App {
-    private loaderElement: HTMLElement;
     private roomsElement: HTMLElement;
     private scenesElement: HTMLElement;
-    private errorMessage: HTMLElement;
     private statusBadge: HTMLElement;
     private banner: HTMLElement;
     private refreshButton: HTMLButtonElement;
     private allOffButton: HTMLButtonElement;
     private refreshing = false;
     private refreshTimer: number | null = null;
+    private hasSnapshot = false;
+    private readonly snapshotKey = `lutroncontrol:snapshot:v1:${new URL('.', window.location.href).pathname}`;
 
     constructor() {
-        this.loaderElement = document.getElementById('loader');
         this.scenesElement = document.getElementById('scenes');
         this.roomsElement = document.getElementById('rooms');
-        this.errorMessage = document.getElementById('error-message');
         this.statusBadge = document.getElementById('status-badge');
         this.banner = document.getElementById('banner');
         this.refreshButton = document.getElementById('refresh-button') as HTMLButtonElement;
@@ -37,8 +35,15 @@ class App {
                 this.setStatus('' + e, 'error');
             }
         });
+        this.restoreSnapshot();
         this.refresh(true);
         this.refreshTimer = window.setInterval(() => this.refresh(false), 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.refresh(false);
+            }
+        });
+        window.addEventListener('online', () => this.refresh(false));
     }
 
     async refresh(showLoading: boolean) {
@@ -46,24 +51,52 @@ class App {
             return;
         }
         this.refreshing = true;
-        if (showLoading) {
+        if (showLoading && !this.hasSnapshot) {
             document.body.className = 'status-loading';
         }
-        this.setStatus('Refreshing...', 'info');
-        let devices: LutronDevice[];
-        let scenes: SceneInfo[] = [];
+        this.setStatus(this.hasSnapshot ? 'Updating saved state...' : 'Refreshing...', 'info');
         try {
-            devices = await fetchDevices();
-            scenes = await fetchScenes();
+            const devices = await fetchDevices();
+            const scenes = await fetchScenes();
+            this.showDevices(devices);
+            this.showScenes(scenes);
+            this.hasSnapshot = true;
+            this.saveSnapshot(devices, scenes);
+            this.setStatus('Updated just now', 'success');
         } catch (e) {
             this.showError('' + e);
+        } finally {
+            document.body.classList.remove('status-loading');
             this.refreshing = false;
-            return;
         }
-        this.showDevices(devices);
-        this.showScenes(scenes);
-        this.setStatus('Updated just now', 'success');
-        this.refreshing = false;
+    }
+
+    private restoreSnapshot() {
+        try {
+            const saved = localStorage.getItem(this.snapshotKey);
+            if (!saved) {
+                return;
+            }
+            const snapshot = JSON.parse(saved);
+            if (!Array.isArray(snapshot.devices) || !Array.isArray(snapshot.scenes)) {
+                return;
+            }
+            this.showDevices(snapshot.devices);
+            this.showScenes(snapshot.scenes);
+            this.hasSnapshot = true;
+        } catch (e) {
+            // Unavailable storage or an invalid snapshot must not prevent a live load.
+            this.roomsElement.innerHTML = '';
+            this.scenesElement.innerHTML = '';
+        }
+    }
+
+    private saveSnapshot(devices: LutronDevice[], scenes: SceneInfo[]) {
+        try {
+            localStorage.setItem(this.snapshotKey, JSON.stringify({ devices, scenes }));
+        } catch (e) {
+            // The live dashboard still works if browser storage is unavailable or full.
+        }
     }
 
     showDevices(devices: LutronDevice[]) {
@@ -126,16 +159,20 @@ class App {
     }
 
     showError(err: string) {
-        document.body.className = 'status-error';
-        this.errorMessage.textContent = err;
+        this.setStatus(this.hasSnapshot
+            ? `Could not update. Showing saved state. ${err}`
+            : `Could not load devices. Tap Refresh to retry. ${err}`, 'error');
     }
 
     private setStatus(message: string, kind: BannerKind) {
-        this.statusBadge.textContent = message;
+        this.statusBadge.textContent = kind === 'error' ? 'Connection error' : message;
+        this.statusBadge.title = message;
         this.statusBadge.className = `status-badge status-${kind}`;
         this.banner.textContent = '';
         this.banner.className = 'banner';
         if (kind === 'error') {
+            this.banner.textContent = message;
+            this.banner.classList.add('banner-error');
             console.error(message);
         }
     }

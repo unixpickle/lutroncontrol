@@ -25,11 +25,18 @@ function fetchScenes() {
 }
 function fetchAPI(url) {
     return __awaiter(this, void 0, void 0, function* () {
-        const obj = yield (yield fetch(url)).json();
-        if (obj.hasOwnProperty("error")) {
-            throw new RemoteError(obj["error"]);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 15000);
+        try {
+            const obj = yield (yield fetch(url, { signal: controller.signal })).json();
+            if (obj.hasOwnProperty("error")) {
+                throw new RemoteError(obj["error"]);
+            }
+            return obj;
         }
-        return obj;
+        finally {
+            window.clearTimeout(timeout);
+        }
     });
 }
 function deviceRoom(device) {

@@ -11,10 +11,10 @@ class App {
     constructor() {
         this.refreshing = false;
         this.refreshTimer = null;
-        this.loaderElement = document.getElementById('loader');
+        this.hasSnapshot = false;
+        this.snapshotKey = `lutroncontrol:snapshot:v1:${new URL('.', window.location.href).pathname}`;
         this.scenesElement = document.getElementById('scenes');
         this.roomsElement = document.getElementById('rooms');
-        this.errorMessage = document.getElementById('error-message');
         this.statusBadge = document.getElementById('status-badge');
         this.banner = document.getElementById('banner');
         this.refreshButton = document.getElementById('refresh-button');
@@ -30,8 +30,15 @@ class App {
                 this.setStatus('' + e, 'error');
             }
         }));
+        this.restoreSnapshot();
         this.refresh(true);
         this.refreshTimer = window.setInterval(() => this.refresh(false), 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.refresh(false);
+            }
+        });
+        window.addEventListener('online', () => this.refresh(false));
     }
     refresh(showLoading) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -39,26 +46,53 @@ class App {
                 return;
             }
             this.refreshing = true;
-            if (showLoading) {
+            if (showLoading && !this.hasSnapshot) {
                 document.body.className = 'status-loading';
             }
-            this.setStatus('Refreshing...', 'info');
-            let devices;
-            let scenes = [];
+            this.setStatus(this.hasSnapshot ? 'Updating saved state...' : 'Refreshing...', 'info');
             try {
-                devices = yield fetchDevices();
-                scenes = yield fetchScenes();
+                const devices = yield fetchDevices();
+                const scenes = yield fetchScenes();
+                this.showDevices(devices);
+                this.showScenes(scenes);
+                this.hasSnapshot = true;
+                this.saveSnapshot(devices, scenes);
+                this.setStatus('Updated just now', 'success');
             }
             catch (e) {
                 this.showError('' + e);
+            }
+            finally {
+                document.body.classList.remove('status-loading');
                 this.refreshing = false;
+            }
+        });
+    }
+    restoreSnapshot() {
+        try {
+            const saved = localStorage.getItem(this.snapshotKey);
+            if (!saved) {
                 return;
             }
-            this.showDevices(devices);
-            this.showScenes(scenes);
-            this.setStatus('Updated just now', 'success');
-            this.refreshing = false;
-        });
+            const snapshot = JSON.parse(saved);
+            if (!Array.isArray(snapshot.devices) || !Array.isArray(snapshot.scenes)) {
+                return;
+            }
+            this.showDevices(snapshot.devices);
+            this.showScenes(snapshot.scenes);
+            this.hasSnapshot = true;
+        }
+        catch (e) {
+            this.roomsElement.innerHTML = '';
+            this.scenesElement.innerHTML = '';
+        }
+    }
+    saveSnapshot(devices, scenes) {
+        try {
+            localStorage.setItem(this.snapshotKey, JSON.stringify({ devices, scenes }));
+        }
+        catch (e) {
+        }
     }
     showDevices(devices) {
         const roomToDevs = new Map();
@@ -117,15 +151,19 @@ class App {
         });
     }
     showError(err) {
-        document.body.className = 'status-error';
-        this.errorMessage.textContent = err;
+        this.setStatus(this.hasSnapshot
+            ? `Could not update. Showing saved state. ${err}`
+            : `Could not load devices. Tap Refresh to retry. ${err}`, 'error');
     }
     setStatus(message, kind) {
-        this.statusBadge.textContent = message;
+        this.statusBadge.textContent = kind === 'error' ? 'Connection error' : message;
+        this.statusBadge.title = message;
         this.statusBadge.className = `status-badge status-${kind}`;
         this.banner.textContent = '';
         this.banner.className = 'banner';
         if (kind === 'error') {
+            this.banner.textContent = message;
+            this.banner.classList.add('banner-error');
             console.error(message);
         }
     }

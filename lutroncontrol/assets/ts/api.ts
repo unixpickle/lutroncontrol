@@ -71,11 +71,17 @@ async function fetchScenes(): Promise<SceneInfo[]> {
 }
 
 async function fetchAPI<T>(url: string): Promise<T> {
-    const obj = await (await fetch(url)).json();
-    if (obj.hasOwnProperty("error")) {
-        throw new RemoteError(obj["error"]);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    try {
+        const obj = await (await fetch(url, { signal: controller.signal })).json();
+        if (obj.hasOwnProperty("error")) {
+            throw new RemoteError(obj["error"]);
+        }
+        return obj as T;
+    } finally {
+        window.clearTimeout(timeout);
     }
-    return obj as T;
 }
 
 function deviceRoom(device: LutronDevice): string {

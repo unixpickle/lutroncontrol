@@ -78,7 +78,10 @@ The UI is a single-page dashboard that:
   - Pico/button devices: button actions.
 - Provides a Scenes panel with programmed scenes.
 - Includes an All Off button.
-- Auto-refreshes periodically.
+- Auto-refreshes periodically, when returning to the app, and when connectivity returns.
+- Restores the last successful devices and scenes from this browser immediately on load.
+  Saved controls can send commands while the latest state loads; displayed levels may be stale.
+- Reports connection errors without hiding or moving the controls.
 
 ## Notes
 
